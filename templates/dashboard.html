@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Today's Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Welcome back, {{ current_user.name.split()[0] }}!</h1>
+    {% if daily_quote %}
+        <p class="motivational-quote">"{{ daily_quote }}"</p>
+    {% endif %}
+</div>
+
+<div class="dashboard-grid">
+    <div class="card stat-card">
+        <h3>Calories Eaten</h3>
+        <div class="stat-value" id="calories-eaten">{{ total_calories|int }}</div>
+        <small>/ {{ daily_goal|int }} kcal</small>
+    </div>
+    <div class="card stat-card">
+        <h3>Calories Burned</h3>
+        <div class="stat-value" id="calories-burned">{{ workout_calories|int }}</div>
+        <small>kcal</small>
+    </div>
+    <div class="card stat-card">
+        <h3>Net Calories</h3>
+        <div class="stat-value" id="calories-net">{{ (total_calories - workout_calories)|int }}</div>
+        <small>kcal</small>
+    </div>
+    <div class="card stat-card">
+        <h3>Streak</h3>
+        <div class="stat-value" id="streak-value">{{ streak }}</div>
+        <small>Days</small>
+    </div>
+</div>
+
+<div class="ai-plans-container">
+    <div class="ai-plan-card">
+        <div class="ai-plan-header">
+            <div class="ai-plan-title">
+                <i class="fas fa-utensils"></i>
+                <h2>Today's Diet</h2>
+            </div>
+            <div id="diet-date" class="plan-date"></div>
+        </div>
+        <ul class="plan-item-list" id="diet-list">
+            {{ diet_plan_html|safe }}
+        </ul>
+
+        {% if user_meals_today %}
+        <div class="user-logged-section">
+            <h3 class="user-logged-title">Your Logged Meals</h3>
+            <ul class="plan-item-list">
+                {% for meal in user_meals_today %}
+                <li class="plan-item completed">
+                    <input type="checkbox" checked disabled>
+                    <div class="item-details">
+                        <div class="item-name">{{ meal.name }}</div>
+                        <div class="item-info">{{ meal.calories|int }} kcal</div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="ai-plan-card">
+        <div class="ai-plan-header">
+            <div class="ai-plan-title">
+                <i class="fas fa-dumbbell"></i>
+                <h2>Today's Workout</h2>
+            </div>
+            <div id="workout-date" class="plan-date"></div>
+        </div>
+        <ul class="plan-item-list" id="workout-list">
+             {{ workout_plan_html|safe }}
+        </ul>
+
+        {% if user_workouts_today %}
+        <div class="user-logged-section">
+            <h3 class="user-logged-title">Your Logged Workouts</h3>
+            <ul class="plan-item-list">
+                {% for workout in user_workouts_today %}
+                <li class="plan-item completed">
+                    <input type="checkbox" checked disabled>
+                    <div class="item-details">
+                        <div class="item-name">{{ workout.type }}</div>
+                        <div class="item-info">{{ workout.calories_burned|int }} kcal burned</div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="charts-grid">
+    <div class="card">
+        {% if weight_graph_img %}
+            <img src="{{ weight_graph_img }}" alt="Weight progress graph" style="width: 100%; height: auto; border-radius: 0.5rem;">
+        {% else %}
+            <div style="text-align: center; padding: 4rem 1rem;">
+                <p>Log your weight to see your progress chart here.</p>
+            </div>
+        {% endif %}
+    </div>
+    <div class="card">
+        {% if calorie_graph_img %}
+            <img src="{{ calorie_graph_img }}" alt="Calorie trend graph" style="width: 100%; height: auto; border-radius: 0.5rem;">
+        {% else %}
+            <div style="text-align: center; padding: 4rem 1rem;">
+                <p>Log your meals to see your calorie trend here.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    function setTodaysDate() {
+        const today = new Date();
+        const dateOptions = { weekday: 'long', month: 'long', day: 'numeric' };
+        const formattedDate = today.toLocaleDateString('en-US', dateOptions);
+        const dietDateElem = document.getElementById('diet-date');
+        const workoutDateElem = document.getElementById('workout-date');
+        if (dietDateElem) dietDateElem.innerText = formattedDate;
+        if (workoutDateElem) workoutDateElem.innerText = formattedDate;
+    }
+
+    function handleItemLogging(event) {
+        const target = event.target;
+        if (target.matches('input[type="checkbox"]')) {
+            const item = target.closest('.plan-item');
+            const itemCalories = parseFloat(item.dataset.calories);
+            const itemType = item.dataset.type;
+            const isChecked = target.checked;
+            item.classList.toggle('completed', isChecked);
+            updateCalories(isChecked ? itemCalories : -itemCalories, itemType);
+        }
+        if (target.matches('.edit-btn, .edit-btn *')) {
+            const item = target.closest('.plan-item');
+            showEditForm(item);
+        }
+    }
+
+    function showEditForm(item) {
+        const detailsDiv = item.querySelector('.item-details');
+        const originalCalories = parseFloat(item.dataset.calories);
+        const itemType = item.dataset.type;
+        item.querySelector('input[type="checkbox"]').disabled = true;
+        const formHTML = `<form class="edit-item-form"><input type="text" name="name" placeholder="New ${itemType}" required><input type="number" name="calories" placeholder="kcal" required style="width: 80px;"><button type="submit" class="btn btn-primary" style="padding: 0.5rem 0.75rem;">Log</button></form>`;
+        detailsDiv.innerHTML = formHTML;
+        const form = detailsDiv.querySelector('.edit-item-form');
+        form.querySelector('input[name="name"]').focus();
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const newName = e.target.elements.name.value;
+            const newCalories = parseFloat(e.target.elements.calories.value);
+            item.querySelector('input[type="checkbox"]').disabled = false;
+            if (!item.classList.contains('completed')) {
+                updateCalories(newCalories, itemType);
+            } else {
+                updateCalories(newCalories - originalCalories, itemType);
+            }
+            item.dataset.calories = newCalories;
+            detailsDiv.innerHTML = `<div class="item-name">${newName}</div><div class="item-info">${newCalories.toFixed(0)} kcal${itemType === 'workout' ? ' burned' : ''}</div>`;
+            item.classList.add('completed');
+            item.querySelector('input[type="checkbox"]').checked = true;
+            logItemToBackend(newName, newCalories, itemType);
+        });
+    }
+
+    function updateCalories(calorieChange, type) {
+        const eatenElem = document.getElementById('calories-eaten');
+        const burnedElem = document.getElementById('calories-burned');
+        const netElem = document.getElementById('calories-net');
+
+        if (type === 'meal') {
+            eatenElem.innerText = (parseFloat(eatenElem.innerText) + calorieChange).toFixed(0);
+        } else if (type === 'workout') {
+            burnedElem.innerText = (parseFloat(burnedElem.innerText) + calorieChange).toFixed(0);
+        }
+        
+        const eatenTotal = parseFloat(eatenElem.innerText);
+        const burnedTotal = parseFloat(burnedElem.innerText);
+        netElem.innerText = (eatenTotal - burnedTotal).toFixed(0);
+    }
+
+    function logItemToBackend(name, calories, type) {
+        fetch('/log_item_from_dashboard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name, calories: calories, type: type })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Item logged to backend.');
+            } else {
+                console.error('Backend logging failed:', data.error);
+            }
+        })
+        .catch(error => console.error('Network error while logging:', error));
+    }
+
+    setTodaysDate();
+    const dietList = document.getElementById('diet-list');
+    if (dietList) dietList.addEventListener('click', handleItemLogging);
+    const workoutList = document.getElementById('workout-list');
+    if(workoutList) workoutList.addEventListener('click', handleItemLogging);
+});
+</script>
+{% endblock %}
