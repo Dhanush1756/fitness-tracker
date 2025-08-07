@@ -36,7 +36,7 @@ FitTracker is a full-stack fitness tracking web application built with Flask, My
 1. **Clone the repository**
 
 ```bash
-git clone https://github.com/yourusername/fitness-tracker.git
+git clone https://github.com/Dhanush1756/fitness-tracker.git
 cd fitness-tracker
 ```
 
@@ -118,4 +118,5 @@ This project is open-source and available under the MIT License.
 
 **Dhanush S**  
 📧 dhanushs1756@gmail.com  
+
 🔗 [GitHub Profile](https://github.com/Dhanush1756)
